@@ -610,7 +610,7 @@ function probeDesktopIcons(options = {}) {
     try {
       child = execFileImpl(
         String(options.powershellPath || 'powershell.exe'),
-        ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script],
+        ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-Command', script],
         {
           windowsHide: true,
           timeout: Math.max(1000, Math.min(15000, finiteNumber(options.timeoutMs, DEFAULT_PROBE_TIMEOUT_MS))),
@@ -651,7 +651,7 @@ function startDesktopIconWatcher(options = {}) {
   }
   const child = spawnImpl(
     String(options.powershellPath || 'powershell.exe'),
-    ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', desktopIconWatcherScript(options)],
+    ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-Command', desktopIconWatcherScript(options)],
     { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env }
   );
   let stdoutBuffer = '';

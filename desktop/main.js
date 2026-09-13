@@ -103,6 +103,51 @@ const APP_METADATA = APP_PACKAGE_INFO.mineradio || {};
 const APP_NAME = process.env.MINERADIO_RUNTIME_NAME || APP_METADATA.runtimeName || APP_PACKAGE_INFO.productName || 'Mineradio';
 const APP_USER_MODEL_ID = process.env.MINERADIO_APP_USER_MODEL_ID || APP_METADATA.appUserModelId || (APP_PACKAGE_INFO.build && APP_PACKAGE_INFO.build.appId) || 'com.mineradio.desktop';
 const APP_ICON_ICO = path.join(__dirname, '..', 'build', 'icon.ico');
+
+// ---- 本地开发模式（仅自己用） ----
+// 打开方式：设置环境变量 MINERADIO_DEV=1 再启动，或用同目录下的「Dev Mode.bat」。
+// 不设置时下面所有分支都不会生效，等同于原版行为，因此可以安全保留在源码里。
+// 支持 MINERADIO_DEV=0 / false / off 显式关闭（方便在已设全局变量的机器上临时禁用）。
+const MINERADIO_DEV_MODE = (() => {
+  const raw = String(process.env.MINERADIO_DEV || '').trim().toLowerCase();
+  if (!raw || raw === '0' || raw === 'false' || raw === 'off' || raw === 'no') return false;
+  return true;
+})();
+// 触发的三种方式（任一即可）：
+//   1) 启动时自动打开 DevTools —— 不需要按任何键，这是推荐路径
+//   2) Ctrl+Shift+I  切换 DevTools
+//   3) Ctrl+R 重载渲染层 / Ctrl+Shift+R 硬重载（忽略缓存）
+// 注意：F12 也保留了，但**在很多笔记本上不可用** —— ASUS 等机型的 F12 在固件层
+// 就是飞行模式键，Electron 的 preventDefault 拦不住键盘驱动，按下去只会切飞行模式。
+// 别把 F12 当作主要入口。
+// 另外：重载只刷新渲染进程（public/ 下的 js/css/html 改动立刻生效），
+// 主进程（desktop/ 下的文件）改动仍需完全退出后重启。
+function handleDevModeInput(win, event, input) {
+  if (input.type !== 'keyDown') return false;
+  const ctrl = input.control === true || input.meta === true;
+  const shift = input.shift === true;
+  if (input.key === 'F12' || input.code === 'F12') {
+    event.preventDefault();
+    if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
+    else win.webContents.openDevTools({ mode: 'detach' });
+    return true;
+  }
+  if (ctrl && shift && (input.key === 'I' || input.key === 'i' || input.code === 'KeyI')) {
+    event.preventDefault();
+    if (win.webContents.isDevToolsOpened()) win.webContents.closeDevTools();
+    else win.webContents.openDevTools({ mode: 'detach' });
+    return true;
+  }
+  if (ctrl && (input.key === 'R' || input.key === 'r' || input.code === 'KeyR')) {
+    event.preventDefault();
+    console.log('[DevMode] reload renderer', shift ? '(hard)' : '');
+    if (shift) win.webContents.reloadIgnoringCache();
+    else win.webContents.reload();
+    return true;
+  }
+  return false;
+}
+
 const CURRENT_FX_AUTOSAVE_FILE = 'current-fx-autosave.json';
 const CURRENT_FX_AUTOSAVE_MAX_BYTES = 12 * 1024 * 1024;
 const STARTUP_ERROR_LOG_FILE = 'startup-error.log';
@@ -2099,9 +2144,11 @@ function focusMainWindow() {
     return true;
   }
   if (mainWindow.isMinimized()) mainWindow.restore();
-  if (!mainWindow.isVisible()) mainWindow.show();
-  resetMainWindowZoom();
+  mainWindow.show();
+  mainWindow.setAlwaysOnTop(true);
   mainWindow.focus();
+  mainWindow.setAlwaysOnTop(false);
+  resetMainWindowZoom();
   sendWindowState(mainWindow);
   return true;
 }
@@ -3658,7 +3705,7 @@ while ($true) {
 }
 `;
   try {
-    desktopLyricsMousePoller = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+    desktopLyricsMousePoller = spawn('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-Command', script], {
       windowsHide: true,
       stdio: ['ignore', 'pipe', 'pipe'],
     });
@@ -3822,7 +3869,7 @@ public static class MineradioShellMessage {
 "@
 [MineradioShellMessage]::RegisterWindowMessage("TaskbarCreated")
 `;
-  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+  execFile('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-Command', script], {
     windowsHide: true,
     timeout: 5000,
     env: { ...process.env, TEMP: NATIVE_HELPER_TEMP_PATH, TMP: NATIVE_HELPER_TEMP_PATH },
@@ -5679,6 +5726,8 @@ async function createWindowOnce() {
   });
 
   win.webContents.on('before-input-event', (event, input) => {
+    // 开发模式快捷键优先于其它逻辑：否则 Ctrl+R 会被缩放快捷键吃掉。
+    if (handleDevModeInput(win, event, input)) return;
     if (isZoomShortcutInput(input)) {
       event.preventDefault();
       resetMainWindowZoom(win);
@@ -5697,6 +5746,19 @@ async function createWindowOnce() {
   });
 
   win.once('ready-to-show', () => showMainWindowSafely(win, 'ready-to-show'));
+  // 开发模式下启动就自动打开 DevTools：这样完全不需要按热键。
+  // 起因：很多笔记本（ASUS 等）的 F12 在固件层就是飞行模式键，Electron 的
+  // preventDefault 只能拦住"事件传给网页"，拦不住键盘驱动/固件，所以 F12 这类
+  // 功能键在那些机器上根本不能用作触发键。自动打开 + Ctrl+Shift+I 才是可靠路径。
+  // 用 did-finish-load 而不是 ready-to-show：要等渲染进程真正加载完，
+  // 否则 DevTools 打开时 Console 是空的、看不到启动期报错。
+  if (MINERADIO_DEV_MODE) {
+    win.webContents.once('did-finish-load', () => {
+      console.log('[DevMode] dev 模式已启用，自动打开 DevTools；'
+        + '重载渲染层：Ctrl+R（硬重载 Ctrl+Shift+R）；开关 DevTools：Ctrl+Shift+I');
+      if (!win.webContents.isDevToolsOpened()) win.webContents.openDevTools({ mode: 'detach' });
+    });
+  }
   win.on('maximize', () => sendWindowState(win));
   win.on('unmaximize', () => sendWindowState(win));
   win.on('minimize', () => {
@@ -5956,8 +6018,23 @@ if (!gotSingleInstanceLock) {
     screen.on('display-metrics-changed', handleDisplayLayoutChanged);
     screen.on('display-added', handleDisplayLayoutChanged);
     screen.on('display-removed', handleDisplayLayoutChanged);
-    powerMonitor.on('resume', () => restoreUnexpectedMainWindowVisibility(mainWindow, 'system-resume'));
-    powerMonitor.on('unlock-screen', () => restoreUnexpectedMainWindowVisibility(mainWindow, 'screen-unlock'));
+    const sendPowerEvent = (event) => {
+      try {
+        if (mainWindow && !mainWindow.isDestroyed() && mainWindow.webContents) {
+          mainWindow.webContents.send('mineradio-power-event', { event });
+        }
+      } catch (e) {}
+    };
+    powerMonitor.on('suspend', () => sendPowerEvent('suspend'));
+    powerMonitor.on('resume', () => {
+      restoreUnexpectedMainWindowVisibility(mainWindow, 'system-resume');
+      sendPowerEvent('resume');
+    });
+    powerMonitor.on('lock-screen', () => sendPowerEvent('lock-screen'));
+    powerMonitor.on('unlock-screen', () => {
+      restoreUnexpectedMainWindowVisibility(mainWindow, 'screen-unlock');
+      sendPowerEvent('unlock-screen');
+    });
     await createWindow();
   }).catch((e) => reportWindowCreationFailure('Main', e));
 

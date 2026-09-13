@@ -67,7 +67,7 @@ function trimAppWorkingSets(pids) {
   ].join('\r\n');
   fs.writeFileSync(scriptPath, script, 'utf8');
   return new Promise((resolve) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-File', scriptPath], {
       windowsHide: true,
       timeout: 15000,
       maxBuffer: 1024 * 1024,

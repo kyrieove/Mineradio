@@ -879,7 +879,11 @@ async function applyAudioOutputDevice(media) {
     if (!target) return null;
     if (typeof target.setSinkId !== 'function') return false;
     try {
-      await target.setSinkId(sinkId);
+      var sinkPromise = target.setSinkId(sinkId);
+      var timeoutPromise = new Promise(function (_, reject) {
+        setTimeout(function () { reject(new Error('setSinkId timeout')); }, 2000);
+      });
+      await Promise.race([sinkPromise, timeoutPromise]);
       return true;
     } catch (e) {
       errors.push({ label: label, error: e });

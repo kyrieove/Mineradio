@@ -194,7 +194,7 @@ function escapePowerShellLiteral(value) {
 
 function runPowerShellFile(scriptPath, timeoutMs) {
   return new Promise((resolve, reject) => {
-    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath], {
+    execFile('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-File', scriptPath], {
       windowsHide: true,
       timeout: timeoutMs || 60000,
       maxBuffer: 4 * 1024 * 1024,
@@ -376,7 +376,7 @@ function purgeSystemMemoryElevated(mask, options) {
     '$ErrorActionPreference = "Stop"',
     "$scriptPath = '" + escapePowerShellLiteral(scriptPath) + "'",
     "$resultPath = '" + escapePowerShellLiteral(resultPath) + "'",
-    'Start-Process -FilePath powershell.exe -Verb RunAs -Wait -ArgumentList @("-NoProfile","-ExecutionPolicy","Bypass","-File",$scriptPath) | Out-Null',
+    'Start-Process -FilePath powershell.exe -Verb RunAs -Wait -ArgumentList @("-NoProfile","-ExecutionPolicy","RemoteSigned","-File",$scriptPath) | Out-Null',
     'if (Test-Path -LiteralPath $resultPath) { @{ ok=$true } | ConvertTo-Json -Compress } else { @{ ok=$false; needAdmin=$true; message="User cancelled or denied administrator permission." } | ConvertTo-Json -Compress }',
   ]);
   return runPowerShellFile(launcherPath, 120000).then((launcherResult) => {

@@ -536,11 +536,22 @@ async function playAudio(opts) {
   opts = opts || {};
   return attemptAudioPlay({ manual: !!opts.manual, silent: !!opts.silent || !!opts.startupAutoplay || !!opts.trackSwitch, startupAutoplay: !!opts.startupAutoplay, fade: opts.fade, preserveGain: !!opts.preserveGain, trackSwitch: !!opts.trackSwitch, resumeRecovery: !!opts.resumeRecovery, expectedMedia: opts.expectedMedia || audio, expectedToken: opts.expectedToken == null ? trackSwitchToken : opts.expectedToken });
 }
+var playToggleBusySince = 0;
 async function togglePlay() {
-  if (playToggleBusy) return;
+  var now = Date.now();
+  if (playToggleBusy && now - playToggleBusySince < 3500) return;
   playToggleBusy = true;
+  playToggleBusySince = now;
   try {
     forcePlaybackControlsInteractive();
+    if (audio && (audio.error || (audio.networkState === audio.NETWORK_NO_SOURCE && audio.src))) {
+      console.warn('[TogglePlay] audio element errored, rebuilding audio element before play');
+      replaceAudioElementForGraphRecovery('toggle-play-error-state');
+    }
+    var currentSong = playQueue && currentIdx >= 0 && currentIdx < playQueue.length ? playQueue[currentIdx] : null;
+    if (currentSong && typeof resetPlaybackFreshUrlRecoveryBudget === 'function') {
+      resetPlaybackFreshUrlRecoveryBudget(currentSong);
+    }
     if ((!audio || !audio.src) && playQueue.length && currentIdx >= 0) {
       await playQueueAt(currentIdx, { manual: true });
       return;
@@ -585,6 +596,7 @@ async function togglePlay() {
     if (!audio || !audio.src) showToast('播放控制失败');
   } finally {
     playToggleBusy = false;
+    playToggleBusySince = 0;
   }
 }
 function setPlayIcon(p) {
@@ -750,3 +762,46 @@ function cyclePlayMode() {
   showToast('播放模式: ' + playModeLabel(playMode));
 }
 updatePlayModeButton(false);
+
+function handleSystemPowerEvent(type) {
+  console.log('[SystemPowerEvent]', type);
+  if (type === 'suspend' || type === 'lock-screen') {
+    playToggleBusy = false;
+    playToggleBusySince = 0;
+    if (typeof clearPlaybackResumeWatchdogs === 'function') clearPlaybackResumeWatchdogs();
+    if (audio && !audio.paused) {
+      try {
+        audio.pause();
+      } catch (e) {
+        console.warn('[SystemPowerEvent] pause audio error:', e);
+      }
+      playing = false;
+      setPlayIcon(false);
+      if (typeof syncPlaybackStateFromAudioEvent === 'function') {
+        syncPlaybackStateFromAudioEvent('system-' + type);
+      }
+    }
+  } else if (type === 'resume' || type === 'unlock-screen') {
+    playToggleBusy = false;
+    playToggleBusySince = 0;
+    if (typeof forcePlaybackControlsInteractive === 'function') forcePlaybackControlsInteractive();
+    var currentSong = playQueue && currentIdx >= 0 && currentIdx < playQueue.length ? playQueue[currentIdx] : null;
+    if (currentSong && typeof resetPlaybackFreshUrlRecoveryBudget === 'function') {
+      resetPlaybackFreshUrlRecoveryBudget(currentSong);
+    }
+    setTimeout(function () {
+      if (typeof refreshAudioOutputDevices === 'function') {
+        refreshAudioOutputDevices(false);
+      }
+      if (audio && (audio.error || (audio.networkState === audio.NETWORK_NO_SOURCE && audio.src))) {
+        replaceAudioElementForGraphRecovery('system-resume-broken-audio');
+      }
+    }, 450);
+  }
+}
+
+if (window.desktopWindow && typeof window.desktopWindow.onPowerEvent === 'function') {
+  window.desktopWindow.onPowerEvent(function (payload) {
+    handleSystemPowerEvent(payload && payload.event || '');
+  });
+}

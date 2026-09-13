@@ -1411,6 +1411,7 @@ function wallpaperEngineRuntimeErrorText(error) {
   if (/WALLPAPER_ENGINE_WINDOW_CLOSE_FAILED/.test(code)) return '上一次 Mineradio 实时壁纸窗口仍在收尾，请稍后重试；Wallpaper Engine 本体会保留';
   if (/WALLPAPER_ENGINE_DWM_SURFACE_FAILED|WALLPAPER_ENGINE_PARALLAX_RELAY_FAILED/.test(code)) return 'WE 原生鼠标视差连接失败，本次会话已关闭；请再次点击重连';
   if (/WALLPAPER_ENGINE_CONTROL_FAILED/.test(code)) return 'WE 场景控制暂时未就绪，请稍后重试';
+  if (/WALLPAPER_ENGINE_CONTROL_NOT_READY/.test(code)) return 'WE 场景控制通道尚未就绪，请稍后重试';
   if (/WALLPAPER_ENGINE_WINDOW_TIMEOUT/.test(code)) return 'WE 场景窗口启动超时';
   if (/WALLPAPER_ENGINE_CAPTURE_UNAVAILABLE|WALLPAPER_CAPTURE_UNSUPPORTED/.test(code)) return '当前系统不支持实时窗口捕获';
   if (/InvalidStateError/.test(code)) return 'WE 实时画面连接需要 Mineradio 保持在前台';
@@ -1423,7 +1424,104 @@ function wallpaperEngineRuntimeErrorText(error) {
   if (/WALLPAPER_SCENE_PACKAGE_INVALID/.test(code)) return '所选 .pkg/.pak 不是有效的 Wallpaper Engine PKGV 场景包';
   if (/WALLPAPER_SCENE_MANIFEST_INVALID/.test(code)) return '该场景缺少有效的 project.json';
   if (/WALLPAPER_SCENE_NOT_FOUND/.test(code)) return '没有找到该项目的有效场景包';
-  return 'WE 引擎运行失败';
+
+  // ---- 场景包改写 / 解析（引擎模式最常见的失败点）----
+  if (/WALLPAPER_SCENE_PACKAGE_PATCH_FAILED/.test(code)) return 'WE 场景包静音改写失败，引擎模式无法接管；请换一张壁纸或重启 Wallpaper Engine 后重试';
+  if (/WALLPAPER_SCENE_PACKAGE_PATCH_TOO_LARGE/.test(code)) return '该 WE 场景包改写后超出体积上限，无法用于引擎模式';
+  if (/WALLPAPER_SCENE_PACKAGE_SCENE_TOO_COMPLEX/.test(code)) return '该 WE 场景包结构过于复杂，超出解析上限';
+  if (/WALLPAPER_SCENE_PACKAGE_SCENE_INVALID/.test(code)) return '该 WE 场景包内部结构不完整';
+  if (/WALLPAPER_SCENE_PACKAGE_FORMAT_UNSUPPORTED/.test(code)) return '不是受支持的 WE 场景包格式（PKGV）';
+  if (/WALLPAPER_SCENE_PACKAGE_INDEX_INVALID/.test(code)) return 'WE 场景包索引损坏';
+
+  // ---- WE 本体 / 进程 ----
+  if (/WALLPAPER_ENGINE_NOT_RUNNING/.test(code)) return 'Wallpaper Engine 本体没有运行，请先启动它再重试';
+  if (/WALLPAPER_ENGINE_EXECUTABLE_INVALID/.test(code)) return 'Wallpaper Engine 可执行文件路径无效，请确认安装完整';
+  if (/WALLPAPER_ENGINE_PROCESS_PATH_MISMATCH/.test(code)) return '检测到的 Wallpaper Engine 进程路径与安装记录不一致，可能存在多份安装';
+  if (/WALLPAPER_ENGINE_PROCESS_PROBE_FAILED/.test(code)) return '无法探测 Wallpaper Engine 进程，请检查权限或被安全软件拦截';
+  if (/WALLPAPER_ENGINE_RUNTIME_UNAVAILABLE/.test(code)) return 'Wallpaper Engine 运行时不响应，请重启它后重试';
+  if (/WALLPAPER_ENGINE_RUNTIME_PROBE_FAILED/.test(code)) return '无法查询 Wallpaper Engine 运行时状态';
+  if (/WALLPAPER_ENGINE_WINDOWS_ONLY/.test(code)) return 'WE 实时引擎模式仅支持 Windows';
+
+  // ---- 会话 / 启动 ----
+  if (/WALLPAPER_ENGINE_AUDIO_SUPPRESSION_FAILED/.test(code)) return 'WE 音频静音指令未被接受，引擎模式无法接管；请重启 Wallpaper Engine 后重试';
+  if (/WALLPAPER_ENGINE_SILENT_STAGE_FAILED/.test(code)) return 'WE 静音舞台建立失败，请重试';
+  if (/WALLPAPER_ENGINE_BOOTSTRAP_TIMEOUT/.test(code)) return 'WE 引导超时，请重试';
+  if (/WALLPAPER_ENGINE_BOOTSTRAP_CONFLICT/.test(code)) return 'WE 引导冲突：已有另一路启动正在进行，请稍后重试';
+  if (/WALLPAPER_ENGINE_SCENE_START_FAILED/.test(code)) return 'WE 场景启动失败，请重试';
+  if (/WALLPAPER_ENGINE_SCENE_STOP_FAILED/.test(code)) return 'WE 场景停止失败（不影响重新连接）';
+  if (/WALLPAPER_ENGINE_START_SUPERSEDED/.test(code)) return '上一次 WE 启动已被新操作取代，请重试';
+  if (/WALLPAPER_ENGINE_START_FAILED/.test(code)) return 'WE 实时会话启动失败，请重试';
+  if (/WALLPAPER_ENGINE_STOP_FAILED/.test(code)) return 'WE 会话停止失败（不影响重新连接）';
+  if (/WALLPAPER_ENGINE_SUSPEND_FAILED/.test(code)) return 'WE 会话挂起失败';
+  if (/WALLPAPER_ENGINE_SESSION_INVALID|WALLPAPER_ENGINE_SESSION_MISMATCH/.test(code)) return 'WE 会话已失效，请再次点击重连';
+  if (/WALLPAPER_ENGINE_WINDOW_SESSION_INVALID/.test(code)) return 'WE 窗口会话已失效，请再次点击重连';
+  if (/WALLPAPER_ENGINE_DESKTOP_SESSION_INVALID/.test(code)) return '桌面会话无效（可能锁屏或切换了用户会话），请重试';
+  if (/WALLPAPER_ENGINE_DESKTOP_TRANSITION_BUSY/.test(code)) return '桌面模式正在切换，请稍后重试';
+  if (/WALLPAPER_ENGINE_RUNTIME_DISPOSED/.test(code)) return 'WE 运行时已释放，请再次点击重连';
+  if (/WALLPAPER_ENGINE_NOT_ACTIVE/.test(code)) return 'WE 实时会话尚未激活，请先启动再操作';
+  if (/WALLPAPER_ENGINE_HOST_UNAVAILABLE/.test(code)) return 'WE 宿主窗口不可用，通常是 Mineradio 不在前台或桌面模式未就绪';
+  if (/WALLPAPER_ENGINE_HOST_SUSPENDED/.test(code)) return 'WE 宿主窗口已挂起，请重试';
+
+  // ---- 窗口 / 隔离 ----
+  if (/WALLPAPER_ENGINE_WINDOW_ISOLATION_FAILED/.test(code)) return 'WE 窗口隔离失败';
+  if (/WALLPAPER_ENGINE_WINDOW_SOURCE_INVALID/.test(code)) return 'WE 窗口捕获源无效';
+  if (/WALLPAPER_ENGINE_REVEAL_FAILED/.test(code)) return '显示 WE 窗口失败';
+  if (/WALLPAPER_ENGINE_HELPER_EXIT_TIMEOUT/.test(code)) return 'WE 原生辅助进程退出超时';
+  if (/WALLPAPER_ENGINE_VIDEO_LAYER_MISSING/.test(code)) return 'WE 视频层缺失（页面结构异常），请重试';
+
+  // ---- DWM / 视差 / 玻璃表面 ----
+  if (/WALLPAPER_ENGINE_DWM_GLASS_SURFACE_UNAVAILABLE/.test(code)) return 'DWM 玻璃表面不可用（显卡驱动或桌面合成器状态异常）';
+  if (/WALLPAPER_ENGINE_DWM_GLASS_GEOMETRY_INVALID/.test(code)) return 'DWM 几何信息无效';
+  if (/WALLPAPER_ENGINE_DWM_GLASS_CAPTURE_SOURCE_TIMEOUT/.test(code)) return 'DWM 捕获源超时，请重试';
+  if (/WALLPAPER_ENGINE_DWM_ACTIVATE_HANDLER_MISSING/.test(code)) return 'DWM 激活处理器缺失（内部错误）';
+
+  // ---- 捕获 ----
+  if (/WALLPAPER_CAPTURE_GRANT_MISSING|WALLPAPER_GLASS_CAPTURE_GRANT_MISSING/.test(code)) return '屏幕捕获授权缺失，请再次点击重连';
+  if (/WALLPAPER_GLASS_CAPTURE_GRANT_BUSY/.test(code)) return '捕获授权繁忙，请稍后重试';
+  if (/WALLPAPER_CAPTURE_SOURCE_INVALID|WALLPAPER_GLASS_CAPTURE_SOURCE_INVALID/.test(code)) return 'WE 捕获源无效';
+  if (/WALLPAPER_CAPTURE_RENDERER_UNAVAILABLE|WALLPAPER_GLASS_CAPTURE_RENDERER_UNAVAILABLE/.test(code)) return '渲染进程不可用，无法建立捕获';
+  if (/WALLPAPER_CAPTURE_PREPARE_FAILED|WALLPAPER_GLASS_CAPTURE_PREPARE_FAILED/.test(code)) return '捕获准备失败，请重试';
+  if (/WALLPAPER_CAPTURE_PREPARE_RESULT_INVALID|WALLPAPER_GLASS_CAPTURE_PREPARE_RESULT_INVALID/.test(code)) return '捕获准备返回了无效结果';
+  if (/WALLPAPER_CAPTURE_PREPARE_HANDLER_MISSING/.test(code)) return '捕获准备处理器缺失（内部错误）';
+  if (/WALLPAPER_GLASS_CAPTURE_PREPARE_HANDLER_MISSING/.test(code)) return 'WE 实时画面准备处理器缺失（内部错误）';
+  if (/WALLPAPER_GLASS_CAPTURE_PREPARE_TIMEOUT/.test(code)) return 'WE 实时画面准备超时，请重试';
+  if (/WALLPAPER_GLASS_CAPTURE_FAILED/.test(code)) return 'WE 实时画面捕获失败，请重试';
+  if (/WALLPAPER_CAPTURE_CONFIRMATION_FAILED/.test(code)) return '捕获确认失败，请重试';
+  if (/WALLPAPER_CAPTURE_CURSOR_SUPPRESSION_UNVERIFIED/.test(code)) return '鼠标抑制未生效（不影响画面，光标可能可见）';
+  if (/WALLPAPER_GLASS_CAPTURE_HOST_HIDDEN/.test(code)) return 'WE 宿主窗口被隐藏，无法捕获';
+  if (/WALLPAPER_GLASS_CAPTURE_LIVE_PIXELS_TIMEOUT|WALLPAPER_GLASS_CAPTURE_FIRST_FRAME_TIMEOUT/.test(code)) return '等待 WE 实时画面超时，请重试';
+  if (/WALLPAPER_GLASS_CAPTURE_PREPARED_STREAM_MISSING/.test(code)) return '捕获流尚未准备完成';
+
+  // ---- 素材库 / 项目信息 ----
+  if (/WALLPAPER_ENGINE_LIBRARY_UNAVAILABLE/.test(code)) return '找不到 Wallpaper Engine 素材库目录';
+  if (/WALLPAPER_ENGINE_SCAN_FAILED/.test(code)) return '扫描 Wallpaper Engine 素材库失败';
+  if (/WALLPAPER_ENGINE_WORKSHOP_ID_INVALID/.test(code)) return '创意工坊 ID 无效';
+  if (/WALLPAPER_PROJECT_ID_INVALID|WALLPAPER_SCENE_ID_INVALID/.test(code)) return 'WE 项目 / 场景 ID 格式无效';
+  if (/WALLPAPER_PROJECT_NOT_FOUND/.test(code)) return '找不到该 WE 项目（可能已被移除或素材库未同步）';
+  if (/WALLPAPER_PROJECT_MANIFEST_INVALID/.test(code)) return '该 WE 项目缺少有效的 project.json';
+  if (/WALLPAPER_ENGINE_WORKSHOP_DETAILS_UNAVAILABLE/.test(code)) return '无法获取创意工坊项目信息（网络或 API 问题）';
+  if (/WALLPAPER_ENGINE_PROJECT_DETAILS_FAILED|WALLPAPER_ENGINE_OPEN_PROJECT_DETAILS_FAILED/.test(code)) return '读取 WE 项目信息失败';
+  if (/WALLPAPER_ENGINE_IMPORT_FAILED|WALLPAPER_ENGINE_IMPORT_PROJECT_FAILED/.test(code)) return '导入 WE 项目失败';
+  if (/WALLPAPER_ENGINE_REMOVE_ROOT_FAILED/.test(code)) return '移除 WE 素材根目录失败';
+  if (/WALLPAPER_ENGINE_INITIAL_OPEN_DUPLICATE/.test(code)) return '重复打开同一项目（可忽略）';
+
+  // ---- 边界冻结 / 桌面预览 ----
+  if (/WALLPAPER_BOUNDS_FREEZE_/.test(code)) return 'WE 窗口边界冻结失败，请重试';
+  if (/WALLPAPER_BOUNDS_RUNTIME_STOP_FAILED/.test(code)) return 'WE 边界运行时停止失败（不影响重新连接）';
+  if (/WALLPAPER_DESKTOP_PREVIEW_LOAD_TIMEOUT|WALLPAPER_DESKTOP_PREVIEW_LOAD_FAILED/.test(code)) return '桌面预览加载失败';
+  if (/WALLPAPER_DESKTOP_PREVIEW_/.test(code)) return '桌面预览不可用，请重试';
+
+  // ---- 调用来源校验 ----
+  if (/WALLPAPER_ENGINE_UNTRUSTED_CALLER|WALLPAPER_UNTRUSTED_SENDER/.test(code)) return 'WE 调用来源校验失败（内部错误）';
+
+  // ---- 通用兜底 ----
+  // 注意：这条必须放在所有具体错误码之后。`WALLPAPER_FAILED` 不是任何其他
+  // 错误码的子串，所以不会误吞 `..._CAPTURE_FAILED` / `..._START_FAILED` 之类。
+  if (/WALLPAPER_FAILED/.test(code)) return 'WE 引擎运行失败，请重试';
+
+  // 兜底：把真实错误码带出来。原来只返回一句「WE 引擎运行失败」，
+  // 未映射的错误码全部丢失，导致线上问题无法诊断。
+  return code ? ('WE 引擎运行失败（' + code.slice(0, 120) + '）') : 'WE 引擎运行失败';
 }
 
 function requestWallpaperEngineVideoPlayback(video, item, kind, token, revealLayer, attempt) {

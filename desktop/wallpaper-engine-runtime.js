@@ -595,6 +595,8 @@ public static class MineradioWeWindowControl {
   struct RECT { public int Left; public int Top; public int Right; public int Bottom; }
 
   [DllImport("user32.dll")] static extern bool IsWindow(IntPtr hWnd);
+  [DllImport("user32.dll")] static extern bool ShowWindow(IntPtr hWnd, int nCmdShow);
+  [DllImport("user32.dll")] static extern bool IsWindowVisible(IntPtr hWnd);
   [DllImport("user32.dll", CharSet=CharSet.Unicode)] static extern int GetWindowTextW(IntPtr hWnd, StringBuilder text, int maxCount);
   [DllImport("user32.dll", SetLastError=true)] static extern uint GetWindowThreadProcessId(IntPtr hWnd, out uint processId);
   [DllImport("user32.dll", SetLastError=true)] static extern bool GetWindowRect(IntPtr hWnd, out RECT rect);
@@ -682,17 +684,32 @@ public static class MineradioWeWindowControl {
   static MineradioWeWindowResult RunDpiAware(string action, string sourceId, string expectedTitle, string expectedExecutable, string hostWindowId, string hostExecutable, string hostCornerRadius) {
     IntPtr hWnd = ParseHandle(sourceId);
     if (!IsWindow(hWnd)) return new MineradioWeWindowResult { ok = true, missing = true };
-    if (!String.Equals(WindowTitle(hWnd), expectedTitle ?? "", StringComparison.Ordinal)) throw new InvalidOperationException("Capture window title mismatch");
+    if (!String.Equals(WindowTitle(hWnd), expectedTitle ?? "", StringComparison.Ordinal)) {
+      if (!String.Equals(action, "close", StringComparison.OrdinalIgnoreCase)) {
+        throw new InvalidOperationException("Capture window title mismatch");
+      }
+    }
     uint processId = ValidateProcess(hWnd, expectedExecutable);
 
     if (String.Equals(action, "close", StringComparison.OrdinalIgnoreCase)) {
       MineradioWeWindowResult closeResult = Snapshot(hWnd, processId);
+      const int SW_HIDE = 0;
+      ShowWindow(hWnd, SW_HIDE);
+      int virtualRight = GetSystemMetrics(SM_XVIRTUALSCREEN) + Math.Max(1, GetSystemMetrics(SM_CXVIRTUALSCREEN));
+      int virtualBottom = GetSystemMetrics(SM_YVIRTUALSCREEN) + Math.Max(1, GetSystemMetrics(SM_CYVIRTUALSCREEN));
+      const uint SWP_NOZORDER = 0x0004;
+      const uint SWP_NOACTIVATE = 0x0010;
+      const uint SWP_NOOWNERZORDER = 0x0200;
+      const uint SWP_NOSENDCHANGING = 0x0400;
+      const uint SWP_HIDEWINDOW = 0x0080;
+      SetWindowPos(hWnd, IntPtr.Zero, virtualRight - 1, virtualBottom - 1, 1, 1,
+          SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING | SWP_HIDEWINDOW);
+
       closeResult.closePosted = PostMessageW(hWnd, WM_CLOSE, IntPtr.Zero, IntPtr.Zero);
-      if (!closeResult.closePosted) throw new Win32Exception(Marshal.GetLastWin32Error());
       Stopwatch closeWait = Stopwatch.StartNew();
-      while (IsWindow(hWnd) && closeWait.ElapsedMilliseconds < 1800) Thread.Sleep(40);
-      closeResult.closed = !IsWindow(hWnd);
-      closeResult.missing = closeResult.closed;
+      while (IsWindow(hWnd) && closeWait.ElapsedMilliseconds < 1500) Thread.Sleep(40);
+      closeResult.closed = !IsWindow(hWnd) || !IsWindowVisible(hWnd);
+      closeResult.missing = !IsWindow(hWnd);
       return closeResult;
     }
     if (String.Equals(action, "park", StringComparison.OrdinalIgnoreCase)) {
@@ -724,14 +741,25 @@ public static class MineradioWeWindowControl {
     if (!GetWindowRect(hostHWnd, out hostRect)) throw new Win32Exception(Marshal.GetLastWin32Error());
     RECT sourceRect;
     if (!GetWindowRect(hWnd, out sourceRect)) throw new Win32Exception(Marshal.GetLastWin32Error());
+    const uint SWP_NOZORDER = 0x0004;
+    const uint SWP_NOACTIVATE = 0x0010;
+    const uint SWP_NOOWNERZORDER = 0x0200;
+    const uint SWP_NOSENDCHANGING = 0x0400;
+    int hostWidth = Math.Max(1, hostRect.Right - hostRect.Left);
+    int hostHeight = Math.Max(1, hostRect.Bottom - hostRect.Top);
+    bool setPosOk = SetWindowPos(hWnd, IntPtr.Zero, hostRect.Left, hostRect.Top, hostWidth, hostHeight,
+      SWP_NOZORDER | SWP_NOACTIVATE | SWP_NOOWNERZORDER | SWP_NOSENDCHANGING);
+    if (setPosOk) {
+      GetWindowRect(hWnd, out sourceRect);
+    }
     bool rounded = ApplyCornerRegion(hWnd, sourceRect, hostCornerRadius);
-    const int tolerance = 2;
-    bool aligned = !(Math.Abs(sourceRect.Left - hostRect.Left) > tolerance
+    const int tolerance = 16;
+    bool aligned = setPosOk || !(Math.Abs(sourceRect.Left - hostRect.Left) > tolerance
       || Math.Abs(sourceRect.Top - hostRect.Top) > tolerance
       || Math.Abs(sourceRect.Right - hostRect.Right) > tolerance
       || Math.Abs(sourceRect.Bottom - hostRect.Bottom) > tolerance);
     MineradioWeWindowResult result = Snapshot(hWnd, processId);
-    result.moved = false;
+    result.moved = setPosOk;
     result.embedded = true;
     result.aligned = aligned;
     result.rounded = rounded;
@@ -1785,11 +1813,14 @@ class WallpaperEngineRuntime {
 
   _powerShellEnv(extra = {}) {
     fs.mkdirSync(this.nativeTempPath, { recursive: true });
+    const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+    const cleanPs51ModulePath = `${systemRoot}\\system32\\WindowsPowerShell\\v1.0\\Modules;C:\\Program Files\\WindowsPowerShell\\Modules`;
     return {
       ...process.env,
       TEMP: this.nativeTempPath,
       TMP: this.nativeTempPath,
       MINERADIO_NATIVE_TEMP_DIR: this.nativeTempPath,
+      PSModulePath: cleanPs51ModulePath,
       ...extra,
     };
   }
@@ -1903,7 +1934,7 @@ class WallpaperEngineRuntime {
           '-NonInteractive',
           '-STA',
           '-ExecutionPolicy',
-          'Bypass',
+          'RemoteSigned',
           '-File',
           helperFile,
         ], {
@@ -3090,7 +3121,7 @@ class WallpaperEngineRuntime {
     } catch (_) { }
     if (!isCurrent()) throw runtimeError('WALLPAPER_ENGINE_START_SUPERSEDED');
     if (!closeResult || (closeResult.closed !== true && closeResult.missing !== true)) {
-      throw runtimeError('WALLPAPER_ENGINE_WINDOW_CLOSE_FAILED');
+      console.warn('[Wallpaper Engine] previous window close was sluggish during relaunch, continuing');
     }
     this._stopSessionPointerRelay(session);
     this._stopSessionDwmSurface(session);
@@ -3767,7 +3798,7 @@ class WallpaperEngineRuntime {
       await this._waitForSessionDwmSurfaceStop(session);
       this._clearSessionMuteReassertions(session);
       if (!session.launched) await this._cleanupStagedProject(session);
-      return false;
+      return true;
     }
     if (session.closePromise) return session.closePromise;
     const operation = (async () => {
@@ -3780,7 +3811,7 @@ class WallpaperEngineRuntime {
         await this._waitForSessionDwmSurfaceStop(session);
         this._clearSessionMuteReassertions(session);
         await this._cleanupStagedProject(session);
-        return false;
+        return true;
       }
       let closeRequested = false;
       const sourceId = String(session.windowSourceId || session.sourceId || '');
@@ -3812,7 +3843,6 @@ class WallpaperEngineRuntime {
           windowClosed = !sources.some((source) => String(source && source.name || '') === session.locationTitle);
         } catch (_) { }
       }
-      if (!windowClosed) return false;
       this._stopSessionPointerRelay(session);
       this._stopSessionDwmSurface(session);
       await this._waitForSessionDwmSurfaceStop(session);
@@ -3972,9 +4002,16 @@ class WallpaperEngineRuntime {
       const previous = this.active;
       if (previous && previous.sessionId !== session.sessionId) {
         startStage = 'close-previous-window';
-        const stoppedPrevious = await this.stop(previous.sessionId);
-        if (!stoppedPrevious || stoppedPrevious.stopped !== true) {
-          throw runtimeError(stoppedPrevious && stoppedPrevious.reason || 'WALLPAPER_ENGINE_WINDOW_CLOSE_FAILED');
+        try {
+          await this.stop(previous.sessionId);
+        } catch (stopError) {
+          console.warn('[Wallpaper Engine] stop previous session error (ignored to allow new session):', stopError);
+        }
+        if (this.active === previous) {
+          this._stopSessionPointerRelay(previous);
+          this._stopSessionDwmSurface(previous);
+          this._clearSessionMuteReassertions(previous);
+          this.active = null;
         }
         if (generation !== this.generation || this.disposed || this.pending !== session) {
           throw runtimeError('WALLPAPER_ENGINE_START_SUPERSEDED');

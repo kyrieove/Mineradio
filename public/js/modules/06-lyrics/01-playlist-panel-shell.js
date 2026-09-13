@@ -151,6 +151,10 @@ function closePlaylistPanelSoft(reason) {
   if (!panel.classList.contains('peek') && !panel.classList.contains('show')) return false;
   if (peekTimers.pl) { clearTimeout(peekTimers.pl); peekTimers.pl = null; }
   if (typeof resetSecondaryPlaylistEdgeGuard === 'function') resetSecondaryPlaylistEdgeGuard();
+  // 面板关掉后如果相机还锁在队列焦点上，歌词会一直停在右移状态：此时指针通常
+  // 已经在另一块显示器上，mousemove 不会再触发，镜头永远等不到复位。这里兜底。
+  if (typeof orbit !== 'undefined' && orbit && orbit.focus && orbit.focus.type === 'queue'
+    && typeof setFocusZone === 'function') setFocusZone(null, true);
   panel.classList.add('playlist-panel-closing');
   panel.classList.remove('peek', 'show');
   markPlaylistPanelMotion(panel, playlistPanelMotionMs('close'));

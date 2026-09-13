@@ -277,11 +277,15 @@ function schedulePlaybackAnalyserRecovery(reason) {
   });
 }
 function resumeAudioAnalysis() {
-  if (audioCtx && audioCtx.state === 'closed') {
+  if (audioCtx && (audioCtx.state === 'closed' || audioCtx.state === 'interrupted')) {
     replaceAudioElementForGraphRecovery('resume-closed-context');
     initAudio();
   }
-  if (audioCtx && audioCtx.state === 'suspended') return audioCtx.resume().catch(function (e) { console.warn('audio context resume failed:', e); });
+  if (audioCtx && audioCtx.state === 'suspended') {
+    var resumePromise = audioCtx.resume().catch(function (e) { console.warn('audio context resume failed:', e); });
+    var timeoutPromise = new Promise(function (resolve) { setTimeout(resolve, 1500); });
+    return Promise.race([resumePromise, timeoutPromise]);
+  }
   return Promise.resolve();
 }
 async function ensurePlaybackAudioGraph(reason) {

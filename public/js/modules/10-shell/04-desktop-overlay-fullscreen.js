@@ -1344,7 +1344,31 @@ function desktopWallpaperErrorLabel(error) {
     || code.indexOf('WALLPAPER_DESKTOP_PREVIEW') >= 0
     || code.indexOf('WALLPAPER_ENGINE_SESSION_MISMATCH') >= 0) return 'Wallpaper Engine 项目未能安全切换到桌面预览';
   if (code.indexOf('DESKTOP_MODE_DETACH') >= 0 || code.indexOf('FULL_DESKTOP_DETACH') >= 0) return '主窗口恢复失败';
-  return '无法进入完整桌面模式';
+
+  // ---- 桌面宿主 / 窗口挂载 ----
+  if (code.indexOf('WALLPAPER_WORKERW_') >= 0) return '桌面宿主窗口挂载失败，请重启播放器后重试';
+  if (code.indexOf('WALLPAPER_PROGMAN') >= 0) return 'Windows 桌面宿主不可用';
+  if (code.indexOf('WALLPAPER_NATIVE_HANDLE_INVALID') >= 0 || code.indexOf('WALLPAPER_TARGET_NOT_FOUND') >= 0) return '找不到可挂载的桌面窗口';
+  if (code.indexOf('WALLPAPER_CHILD_STYLE_FAILED') >= 0) return '桌面窗口样式设置失败';
+  if (code.indexOf('WALLPAPER_WINDOW_CLOSED') >= 0) return '桌面窗口已关闭';
+  if (code.indexOf('WALLPAPER_WINDOW_DESTROY_FAILED') >= 0 || code.indexOf('WALLPAPER_WINDOW_DESTROY_TIMEOUT') >= 0) return '桌面窗口销毁失败，可能有残留窗口需要重启播放器清理';
+  if (code.indexOf('WALLPAPER_RENDERER_GONE') >= 0) return '渲染进程已退出，请重启播放器';
+
+  // ---- 资源 / 状态 ----
+  if (code.indexOf('WALLPAPER_URL_UNAVAILABLE') >= 0) return '壁纸资源地址不可用';
+  if (code.indexOf('WALLPAPER_DISPLAY_RECONCILE_FAILED') >= 0) return '显示器布局变化后同步失败，请重试';
+  if (code.indexOf('WALLPAPER_RESULT_INVALID') >= 0) return '桌面模式返回了无效结果';
+  if (code.indexOf('WALLPAPER_START_FAILED') >= 0) return '桌面模式启动失败';
+  if (code.indexOf('WALLPAPER_UPDATE_FAILED') >= 0) return '桌面模式更新失败';
+
+  // ---- 内部错误 / 环境缺失 ----
+  if (code.indexOf('WALLPAPER_BROWSER_WINDOW_REQUIRED') >= 0 || code.indexOf('WALLPAPER_SCREEN_REQUIRED') >= 0) return '桌面模式内部错误：缺少窗口或屏幕接口';
+  if (code.indexOf('WALLPAPER_EXEC_UNAVAILABLE') >= 0) return '桌面模式内部错误：无法调用系统进程';
+  if (code.indexOf('WALLPAPER_DESKTOP_API_UNAVAILABLE') >= 0) return '桌面模式接口不可用（版本不匹配？）';
+
+  if (code === 'WALLPAPER_FAILED') return '无法进入完整桌面模式';
+  // 兜底带出真实错误码，避免线上问题只剩一句无法定位的空话。
+  return '无法进入完整桌面模式（' + code.slice(0, 120) + '）';
 }
 function initDesktopWallpaperRuntimeBridge(api) {
   if (!api) return;

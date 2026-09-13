@@ -138,6 +138,12 @@ contextBridge.exposeInMainWorld('desktopWindow', {
     ipcRenderer.on('mineradio-wallpaper-runtime-state', listener);
     return () => ipcRenderer.removeListener('mineradio-wallpaper-runtime-state', listener);
   },
+  onPowerEvent: (callback) => {
+    if (typeof callback !== 'function') return () => {};
+    const listener = (_event, payload) => callback(payload || {});
+    ipcRenderer.on('mineradio-power-event', listener);
+    return () => ipcRenderer.removeListener('mineradio-power-event', listener);
+  },
   onStateChange: (callback) => {
     const listener = (_event, state) => callback(state);
     ipcRenderer.on('desktop-window-state', listener);

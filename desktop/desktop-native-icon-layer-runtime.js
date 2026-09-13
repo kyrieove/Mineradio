@@ -957,14 +957,14 @@ function externalGuardTransport(options = {}) {
     const powershellPath = String(options.powershellPath || 'powershell.exe');
     const windowsRoot = String(process.env.SystemRoot || process.env.WINDIR || 'C:\\Windows');
     const conhostPath = path.join(windowsRoot, 'System32', 'conhost.exe');
-    const commandLine = `"${conhostPath.replace(/"/g, '""')}" --headless "${powershellPath.replace(/"/g, '""')}" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File "${String(options.scriptPath).replace(/"/g, '""')}" -InputPipeName "${inputPipeName}" -OutputPipeName "${outputPipeName}"`;
+    const commandLine = `"${conhostPath.replace(/"/g, '""')}" --headless "${powershellPath.replace(/"/g, '""')}" -NoLogo -NoProfile -NonInteractive -ExecutionPolicy RemoteSigned -File "${String(options.scriptPath).replace(/"/g, '""')}" -InputPipeName "${inputPipeName}" -OutputPipeName "${outputPipeName}"`;
     const bootstrapScript = `$result = Invoke-CimMethod -ClassName Win32_Process -MethodName Create -Arguments @{ CommandLine = ${powershellSingleQuoted(commandLine)} }
 if (-not $result -or [int]$result.ReturnValue -ne 0 -or [int]$result.ProcessId -le 0) { throw 'DESKTOP_ICON_LAYER_EXTERNAL_LAUNCH_FAILED' }
 $result.ProcessId`;
     try {
       bootstrap = (options.bootstrapSpawnImpl || spawn)(
         powershellPath,
-        ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', bootstrapScript],
+        ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-Command', bootstrapScript],
         { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'] }
       );
       if (bootstrap.stderr && typeof bootstrap.stderr.on === 'function') {
@@ -1066,7 +1066,7 @@ function startNativeDesktopIconLayer(options = {}) {
       ? externalGuardTransport({ ...options, scriptPath })
       : spawnImpl(
         String(options.powershellPath || 'powershell.exe'),
-        ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', scriptPath],
+        ['-NoLogo', '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'RemoteSigned', '-File', scriptPath],
         { windowsHide: true, stdio: ['pipe', 'pipe', 'pipe'], env }
       );
   } catch (error) {

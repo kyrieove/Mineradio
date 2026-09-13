@@ -315,9 +315,15 @@ function isPlaylistFullscreenEdgeFocusHold(panel, ex, ey, H) {
 function isFullscreenPlaylistQueueFocusLockedAtEdge(e) {
   var panel = document.getElementById('playlist-panel');
   if (!panel || !isPlaylistPanelActiveState(panel)) return false;
-  var ex = e && isFinite(e.clientX) ? e.clientX : 0;
-  var ey = e && isFinite(e.clientY) ? e.clientY : (shelfHoverCue && isFinite(shelfHoverCue.y) ? shelfHoverCue.y : innerHeight * 0.5);
-  return isPlaylistFullscreenEdgeFocusHold(panel, ex, ey, innerHeight);
+  // 坐标缺失（blur / 窗口失焦，FocusEvent 没有 clientX）不能当作"鼠标贴在左边缘"。
+  // 原来的 `: 0` 兜底正好落在 [-8, 14] 的焦点保持区间里，会把队列镜头永久钉住，
+  // 而指针已经在另一块屏上、mousemove 再也不会触发，歌词就再也回不正。
+  if (!e || !isFinite(e.clientX) || !isFinite(e.clientY)) return false;
+  // 左侧还有一块显示器时，左边缘是"接缝"而不是"停留区"：越过它就意味着指针
+  // 已经离开窗口（副屏在右、主屏在左），此时不能再保持队列焦点。
+  var displayState = (typeof desktopWindowState !== 'undefined' && desktopWindowState) ? desktopWindowState : {};
+  if (displayState.hasDisplayOnLeft) return false;
+  return isPlaylistFullscreenEdgeFocusHold(panel, e.clientX, e.clientY, innerHeight);
 }
 function playlistPanelTargetRect(panel, currentRect) {
   currentRect = currentRect || { left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0 };
@@ -361,7 +367,11 @@ function shouldHidePlaylistPanelOnWindowLeave(e) {
   if (!panel.classList.contains('peek') && !panel.classList.contains('show')) return false;
   if (e && e.relatedTarget) return false;
   if (!e) return true;
-  if (isPlaylistFullscreenEdgeMode() && e.clientX <= 2 && e.clientY > playlistPanelEdgeTopGutter(window.innerHeight) && e.clientY < window.innerHeight - playlistPanelEdgeBottomGutter(window.innerHeight)) return false;
+  // 只有在左侧没有别的显示器时，从左边离开才视为"贴着左边缘"而保留面板。
+  // 副屏在右、主屏在左时，从左边缘出去就是真的离开了窗口，必须正常关闭，
+  // 否则面板会一直挂着，直到用户点击别处才消失。
+  var seamOnLeft = !!(typeof desktopWindowState !== 'undefined' && desktopWindowState && desktopWindowState.hasDisplayOnLeft);
+  if (isPlaylistFullscreenEdgeMode() && !seamOnLeft && e.clientX <= 2 && e.clientY > playlistPanelEdgeTopGutter(window.innerHeight) && e.clientY < window.innerHeight - playlistPanelEdgeBottomGutter(window.innerHeight)) return false;
   return e.clientX <= 12 || e.clientX >= window.innerWidth - 2 || e.clientY <= 2 || e.clientY >= window.innerHeight - 2;
 }
 document.addEventListener('mouseleave', function (e) {

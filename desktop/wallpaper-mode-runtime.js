@@ -246,7 +246,7 @@ function attachWallpaperWindowToDesktop(options = {}) {
     }
     if (signal && typeof signal.addEventListener === 'function') signal.addEventListener('abort', handleAbort, { once: true });
     try {
-      child = execFileImpl('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'Bypass', '-Command', script], {
+      child = execFileImpl('powershell.exe', ['-NoProfile', '-ExecutionPolicy', 'RemoteSigned', '-Command', script], {
         windowsHide: true,
         timeout: Math.max(1000, Math.min(10000, Number(options.timeoutMs) || 5000)),
         maxBuffer: 128 * 1024,

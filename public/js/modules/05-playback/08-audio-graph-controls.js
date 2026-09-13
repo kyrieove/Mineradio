@@ -85,6 +85,7 @@ function resetPlaybackAudioGraphForSourceSwitch(reason) {
   disconnectAudioGraphNodes(!sourceUsesCapture && !mediaElementChanged);
   if (
     preparedGraph
+    && previousSourceMedia !== audio
     && preparedGraph.context
     && preparedGraph.context.state !== 'closed'
     && preparedGraph.source

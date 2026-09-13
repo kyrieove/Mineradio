@@ -17,6 +17,7 @@ const {
 const { BuiltInPlaylistLibrary } = require('./built-in-playlist-library');
 const { WallpaperEngineRuntime } = require('./wallpaper-engine-runtime');
 const { FullDesktopModeRuntime } = require('./full-desktop-mode-runtime');
+const { readOrCreateMcpToken, writeMcpClientInfo } = require('./mcp-http');
 const {
   LoginEasterEggGate,
   LOGIN_EASTER_EGG_GATE_VERSION,
@@ -1815,6 +1816,32 @@ function sendWindowState(win) {
 function sendGlobalHotkeyAction(action) {
   if (!mainWindow || mainWindow.isDestroyed() || !action) return;
   mainWindow.webContents.send('mineradio-global-hotkey', { action });
+}
+
+async function dispatchMcpToolToRenderer(name, args) {
+  if (!mainWindow || mainWindow.isDestroyed()) return { ok: false, error: '主窗口未就绪' };
+  const script = `(() => {
+    const call = window.__mineradioMcpCall;
+    if (typeof call !== 'function') return { ok: false, error: 'MCP 渲染层未加载' };
+    return Promise.resolve(call(${JSON.stringify(String(name))}, ${JSON.stringify(args || {})}))
+      .catch((error) => ({ ok: false, error: String(error && (error.message || error) || 'MCP_CALL_FAILED').slice(0, 500) }));
+  })()`;
+  try {
+    return await mainWindow.webContents.executeJavaScript(script, true);
+  } catch (error) {
+    return { ok: false, error: String(error && (error.message || error.name) || error || 'MCP_RENDERER_FAILED').slice(0, 500) };
+  }
+}
+
+function attachMcpBridge(server, port) {
+  if (!server || typeof server.setMcpBridge !== 'function') return;
+  try {
+    const token = readOrCreateMcpToken(STABLE_USER_DATA_PATH);
+    writeMcpClientInfo(STABLE_USER_DATA_PATH, port, token);
+    server.setMcpBridge({ token, dispatch: dispatchMcpToolToRenderer });
+  } catch (error) {
+    console.warn('[MCP] bridge disabled:', error && error.message || error);
+  }
 }
 
 function unregisterMineradioGlobalHotkeys() {
@@ -5298,6 +5325,7 @@ async function ensureLocalServerStarted() {
     localServer = require(serverModulePath);
     await waitForServer(localServer, STARTUP_SERVER_TIMEOUT_MS);
     await waitForLocalHttpReady(port, STARTUP_HTTP_TIMEOUT_MS);
+    attachMcpBridge(localServer, port);
     writeStartupState('server-ready', { serverReadyAt: Date.now(), port });
     return localServer;
   })().catch((error) => {

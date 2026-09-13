@@ -745,11 +745,9 @@ function updatePlayModeButton(animate) {
   }
 }
 
-function cyclePlayMode() {
-  var modes = ['loop', 'shuffle', 'single'];
-  var idx = modes.indexOf(playMode);
+function setPlayMode(nextMode) {
   var prevMode = playMode;
-  playMode = modes[(idx + 1) % modes.length];
+  playMode = nextMode;
   if (playMode === 'shuffle' && prevMode !== 'shuffle') {
     reorderQueueForShufflePlaybackOrder(currentIdx, { reason: 'play-mode-shuffle' });
   }
@@ -760,6 +758,10 @@ function cyclePlayMode() {
   }
   updatePlayModeButton(true);
   showToast('播放模式: ' + playModeLabel(playMode));
+}
+function cyclePlayMode() {
+  var modes = ['loop', 'shuffle', 'single'];
+  setPlayMode(modes[(modes.indexOf(playMode) + 1) % modes.length]);
 }
 updatePlayModeButton(false);
 

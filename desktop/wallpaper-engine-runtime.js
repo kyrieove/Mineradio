@@ -679,6 +679,10 @@ public static class MineradioWeWindowControl {
     return true;
   }
 
+  static bool Near(RECT a, RECT b) {
+    return Math.Abs(a.Left - b.Left) <= 2 && Math.Abs(a.Top - b.Top) <= 2 && Math.Abs(a.Right - b.Right) <= 2 && Math.Abs(a.Bottom - b.Bottom) <= 2;
+  }
+
   static MineradioWeWindowResult RunDpiAware(string action, string sourceId, string expectedTitle, string expectedExecutable, string hostWindowId, string hostExecutable, string hostCornerRadius) {
     IntPtr hWnd = ParseHandle(sourceId);
     if (!IsWindow(hWnd)) return new MineradioWeWindowResult { ok = true, missing = true };
@@ -728,14 +732,15 @@ public static class MineradioWeWindowControl {
     if (!GetWindowRect(hostHWnd, out hostRect)) throw new Win32Exception(Marshal.GetLastWin32Error());
     RECT sourceRect;
     if (!GetWindowRect(hWnd, out sourceRect)) throw new Win32Exception(Marshal.GetLastWin32Error());
+    bool moved = false;
+    if (!Near(sourceRect, hostRect) && SetWindowPos(hWnd, IntPtr.Zero, hostRect.Left, hostRect.Top, hostRect.Right - hostRect.Left, hostRect.Bottom - hostRect.Top, 0x0614)) {
+      moved = true;
+      GetWindowRect(hWnd, out sourceRect);
+    }
+    bool aligned = Near(sourceRect, hostRect);
     bool rounded = ApplyCornerRegion(hWnd, sourceRect, hostCornerRadius);
-    const int tolerance = 2;
-    bool aligned = !(Math.Abs(sourceRect.Left - hostRect.Left) > tolerance
-      || Math.Abs(sourceRect.Top - hostRect.Top) > tolerance
-      || Math.Abs(sourceRect.Right - hostRect.Right) > tolerance
-      || Math.Abs(sourceRect.Bottom - hostRect.Bottom) > tolerance);
     MineradioWeWindowResult result = Snapshot(hWnd, processId);
-    result.moved = false;
+    result.moved = moved;
     result.embedded = true;
     result.aligned = aligned;
     result.rounded = rounded;
@@ -1374,6 +1379,7 @@ public sealed class MineradioWeDwmSurfaceHost : Form {
       ITaskbarList taskbar = (ITaskbarList)new TaskbarList();
       taskbar.HrInit();
       taskbar.DeleteTab(Handle);
+      taskbar.DeleteTab(sourceWindow);
       Marshal.FinalReleaseComObject(taskbar);
     } catch { }
   }

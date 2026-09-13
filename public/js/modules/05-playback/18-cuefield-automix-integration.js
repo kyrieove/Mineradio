@@ -1080,7 +1080,6 @@ async function executeCuefieldAutoMix(pending) {
         cuefieldRecentRecipes.push(String(recipe));
         cuefieldRecentRecipes = cuefieldRecentRecipes.slice(-2);
       }
-      showCuefieldFeedback(feedback);
     }
   } catch (err) {
     console.warn('[CuefieldAutoMix] handoff failed:', err);
